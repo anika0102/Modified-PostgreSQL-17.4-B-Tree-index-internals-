@@ -13,6 +13,7 @@ RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/
 # Expose SSH and PostgreSQL ports
 EXPOSE 22 5432
 
+
 # Start SSH and PostgreSQL on container startup
 CMD service ssh start && service postgresql start && tail -f /dev/null
 
