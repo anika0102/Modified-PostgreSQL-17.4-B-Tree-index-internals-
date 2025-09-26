@@ -103,7 +103,9 @@ static void _bt_checkkeys_look_ahead(IndexScanDesc scan, BTReadPageState *pstate
 static int	_bt_keep_natts(Relation rel, IndexTuple lastleft,
 						   IndexTuple firstright, BTScanInsert itup_key);
 
-
+bool btree_leaf_prefetch = false;
+bool btree_binsrch_linear = false;
+int  btree_binsrch_linear_threshold = 4;
 /*
  * _bt_mkscankey
  *		Build an insertion scan key that contains comparison data from itup

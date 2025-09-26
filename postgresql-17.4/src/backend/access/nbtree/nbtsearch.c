@@ -333,30 +333,71 @@ _bt_moveright(Relation rel,
  * the given page.  _bt_binsrch() has no lock or refcount side effects
  * on the buffer.
  */
+
 static OffsetNumber
 _bt_binsrch(Relation rel,
-			BTScanInsert key,
-			Buffer buf)
+            BTScanInsert key,
+            Buffer buf)
 {
-	Page		page;
-	BTPageOpaque opaque;
-	OffsetNumber low,
-				high;
-	int32		result,
-				cmpval;
+    Page        page;
+    BTPageOpaque opaque;
+    OffsetNumber low,
+                high;
+    int32       result,
+                cmpval;
 
-	page = BufferGetPage(buf);
-	opaque = BTPageGetOpaque(page);
+    page = BufferGetPage(buf);
+    opaque = BTPageGetOpaque(page);
 
-	/* Requesting nextkey semantics while using scantid seems nonsensical */
-	Assert(!key->nextkey || key->scantid == NULL);
-	/* scantid-set callers must use _bt_binsrch_insert() on leaf pages */
-	Assert(!P_ISLEAF(opaque) || key->scantid == NULL);
+    low = P_FIRSTDATAKEY(opaque);
+    high = PageGetMaxOffsetNumber(page);
 
-	low = P_FIRSTDATAKEY(opaque);
-	high = PageGetMaxOffsetNumber(page);
+    int nitems = (int)(high - low + 1);
 
-	/*
+    /* Linear scan shortcut for tiny leaf pages */
+    if (btree_binsrch_linear &&
+        P_ISLEAF(opaque) &&
+        nitems >= 2 &&
+        nitems <= btree_binsrch_linear_threshold)
+    {
+        elog(DEBUG1, "Linear search for %d elements", nitems);
+		OffsetNumber search_low = low;
+		OffsetNumber search_high = high;
+        // OffsetNumber off;
+		// int32 cmpval;
+		search_high++;
+		cmpval = key->nextkey ? 0 : 1;
+
+		while (search_high > search_low)
+             {
+                 int32 result = _bt_compare(rel, key, page, search_low);
+                 
+                 if (result >= cmpval)
+                 {
+                     /* This matches: low = mid + 1 in binary search */
+                     search_low++;
+                 }
+                 else
+                 {
+                     /* This matches: high = mid in binary search */
+                     /* In linear search, we found our boundary */
+                     break;
+                 }
+             }
+             
+             /* At this point search_high == search_low (same as binary search end) */
+             
+             /* Apply identical leaf page logic as binary search */
+             if (key->backward)
+                 return OffsetNumberPrev(search_low);
+                 
+             return search_low;
+    }
+
+
+     
+
+    /*
 	 * If there are no keys on the page, return the first available slot. Note
 	 * this covers two cases: the page is really empty (no keys), or it
 	 * contains only a high key.  The latter case is possible after vacuuming.
@@ -1578,6 +1619,25 @@ _bt_readpage(IndexScanDesc scan, ScanDirection dir, OffsetNumber offnum,
 
 	page = BufferGetPage(so->currPos.buf);
 	opaque = BTPageGetOpaque(page);
+	if (btree_leaf_prefetch)
+		{
+			bool is_leaf = (opaque->btpo_flags & BTP_LEAF) != 0;
+			if (is_leaf)
+			{
+			
+				BlockNumber nextblk = InvalidBlockNumber;
+				if (ScanDirectionIsForward(dir))
+					nextblk = opaque->btpo_next;
+				else
+					nextblk = opaque->btpo_prev;
+			
+			if (BlockNumberIsValid(nextblk))
+				{
+					PrefetchBuffer(scan->indexRelation, MAIN_FORKNUM, nextblk);
+					elog(DEBUG1, "Prefetch for the btree is scheduled for %u", nextblk);
+				}
+			}
+		}
 
 	/* allow next page be processed by parallel worker */
 	if (scan->parallel_scan)
@@ -1936,7 +1996,7 @@ _bt_readpage(IndexScanDesc scan, ScanDirection dir, OffsetNumber offnum,
 		so->currPos.lastItem = MaxTIDsPerBTreePage - 1;
 		so->currPos.itemIndex = MaxTIDsPerBTreePage - 1;
 	}
-
+	
 	return (so->currPos.firstItem <= so->currPos.lastItem);
 }
 

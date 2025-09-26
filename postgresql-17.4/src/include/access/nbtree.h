@@ -1159,6 +1159,10 @@ typedef struct BTOptions
 #define PROGRESS_BTREE_PHASE_PERFORMSORT_2				4
 #define PROGRESS_BTREE_PHASE_LEAF_LOAD					5
 
+extern bool btree_leaf_prefetch;
+extern bool btree_binsrch_linear;
+extern int  btree_binsrch_linear_threshold;
+
 /*
  * external entry points for btree, in nbtree.c
  */

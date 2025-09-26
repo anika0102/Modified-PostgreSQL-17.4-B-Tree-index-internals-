@@ -88,6 +88,8 @@
 #include "utils/plancache.h"
 #include "utils/ps_status.h"
 #include "utils/xml.h"
+#include "access/nbtree.h"
+
 
 /* This value is normally passed in from the Makefile */
 #ifndef PG_KRB_SRVTAB
@@ -770,6 +772,24 @@ StaticAssertDecl(lengthof(config_type_names) == (PGC_ENUM + 1),
 
 struct config_bool ConfigureNamesBool[] =
 {
+	{
+		{"btree_leaf_prefetch", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Enables btree leaf prefetching optimization."),
+			NULL
+		},
+		&btree_leaf_prefetch,
+		false,
+		NULL, NULL, NULL
+	},
+	{
+		{"btree_binsrch_linear", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Enables linear search for small btree arrays."),
+			NULL
+		},
+		&btree_binsrch_linear,
+		false,
+		NULL, NULL, NULL
+	},
 	{
 		{"enable_seqscan", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Enables the planner's use of sequential-scan plans."),
@@ -2035,6 +2055,17 @@ struct config_bool ConfigureNamesBool[] =
 
 struct config_int ConfigureNamesInt[] =
 {
+	{
+
+		{"btree_binsrch_linear_threshold", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Sets the threshold for btree linear search."),
+			NULL
+		},
+		&btree_binsrch_linear_threshold,
+		4, 1, 32,
+		NULL, NULL, NULL
+	},
+	
 	{
 		{"archive_timeout", PGC_SIGHUP, WAL_ARCHIVING,
 			gettext_noop("Sets the amount of time to wait before forcing a "
